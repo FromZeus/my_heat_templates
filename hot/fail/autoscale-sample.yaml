@@ -1,0 +1,77 @@
+heat_template_version: 2013-05-23
+
+description: A simple auto scaling group.
+
+parameters:
+  key:
+    type: string
+    description: keypair to enable SSH access to the instance.
+    default: dtrishkin-key
+
+  image:
+    type: string
+    description: ID of the image to use for the instance to be created.
+    default: Ubuntu_14.04
+
+  private_network:
+    type: string
+    label: Private network name or ID
+    description: Network to attach instance to.
+    default: heat-testing-net
+
+  volume_size:
+    type: number
+    description: Size of volume to attach to instance
+    default: 1
+    constraints:
+      - range: {min: 1, max: 10}
+
+  num_volumes:
+    type: number
+    description: Number of volumes to attach to instance
+    default: 2
+    constraints:
+      - range: {min: 1, max: 10}
+
+  instance_type:
+    type: string
+    description: Type of the instance to be created.
+    default: m1.small
+
+resources:
+  group_of_nodes:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      cooldown: 60
+      desired_capacity: 2
+      max_size: 3
+      min_size: 1
+      resource:
+        type: "server_with_volumes.yaml"
+        properties:
+          key: {get_param: key}
+          image: {get_param: image}
+          private_network: {get_param: private_network}
+          volume_size: {get_param: volume_size}
+          num_volumes: {get_param: num_volumes}
+          instance_type: {get_param: instance_type}
+
+  scaleup_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: { get_resource: group_of_nodes }
+      cooldown: 60
+      scaling_adjustment: 1
+
+  cpu_alarm_high:
+    type: OS::Ceilometer::Alarm
+    properties:
+      meter_name: cpu_util
+      statistic: avg
+      period: 60
+      evaluation_periods: 1
+      threshold: 50
+      alarm_actions:
+        - {get_attr: [scaleup_policy, alarm_url]}
+      comparison_operator: gt

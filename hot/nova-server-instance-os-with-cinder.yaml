@@ -1,0 +1,65 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a single compute instance
+
+parameters:
+  image:
+    type: string
+    label: Image name or ID
+    description: Image to be used for compute instance
+    constraints:
+      - custom_constraint: glance.image
+    default: Ubuntu_14.04
+  flavor:
+    type: string
+    label: Flavor
+    description: Type of instance (flavor) to be used
+    constraints:
+      - custom_constraint: nova.flavor
+    default: m1.small
+  key:
+    type: string
+    label: Key name
+    description: Name of key-pair to be used for compute instance
+    default: dtrishkin-key
+    constraints:
+      - custom_constraint: nova.keypair
+  private_network:
+    type: string
+    label: Private network name or ID
+    description: Network to attach instance to.
+    default: heat-testing-net
+  vol_size:
+    type: number
+    description: The size of the Cinder volume
+    default: 1
+
+resources:
+  my_instance:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - network: { get_param: private_network }
+      user_data_format: RAW
+      user_data:
+        adduser --disabled-password --gecos "" ubuntu
+
+  my_vol:
+    type: OS::Cinder::Volume
+    properties:
+      size: { get_param: vol_size }
+
+  vol_att:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: { get_resource: my_instance }
+      volume_id: { get_resource: my_vol }
+      mountpoint: /dev/vdb
+
+outputs:
+  instance_ip:
+    description: IP address of the instance
+    value: { get_attr: [my_instance, first_address] }
